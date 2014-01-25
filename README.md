@@ -1,4 +1,4 @@
 Deferred
 ========
 
-C# implementation of the deferred pattern, as seen in jQuery
+C# implementation of the deferred pattern. Inspired by jQuery's $.Deferred() object.
