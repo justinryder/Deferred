@@ -1,7 +1,14 @@
-﻿using NUnit.Framework;
+﻿using System;
+using Moq;
+using NUnit.Framework;
 
 namespace Deferred.Test
 {
+  public interface ITestHandlerObject
+  {
+    void Handler(object sender, EventArgs args);
+  }
+
   [TestFixture]
   public abstract class DeferredTest
   {
@@ -19,7 +26,9 @@ namespace Deferred.Test
     {
     }
 
-    protected abstract void Because();
+    protected virtual void Because()
+    {
+    }
 
     public abstract class WhenUsingAPromise : DeferredTest
     {
@@ -33,25 +42,65 @@ namespace Deferred.Test
 
       public abstract class WhenRegisteringADoneHandler : WhenUsingAPromise
       {
-        public int DoneHandlerInvocationCount { get; private set; }
+        public Mock<ITestHandlerObject> DoneHandler1 { get; private set; }
+        public EventArgs DoneEventArgs1 { get; private set; }
 
         protected override void EstablishContext()
         {
           base.EstablishContext();
-          PromiseUnderTest.Done((sender, args) => { DoneHandlerInvocationCount++; });
+          DoneHandler1 = new Mock<ITestHandlerObject>();
+          DoneEventArgs1 = new EventArgs();
+        }
+
+        protected override void Because()
+        {
+          base.Because();
+          PromiseUnderTest.Done(DoneHandler1.Object.Handler);
         }
 
         public class WhenTheDeferredIsResolved : WhenRegisteringADoneHandler
         {
           protected override void Because()
           {
+            base.Because();
             SystemUnderTest.Resolve(null);
           }
 
           [Test]
           public void TheDoneHandlerShouldBeInvoked()
           {
-            Assert.AreEqual(1, DoneHandlerInvocationCount);
+            DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+          }
+
+          public class WhenAnotherDoneHandlerIsRegistered : WhenTheDeferredIsResolved
+          {
+            public Mock<ITestHandlerObject> DoneHandler2 { get; private set; }
+            public EventArgs DoneEventArgs2 { get; private set; }
+
+            protected override void EstablishContext()
+            {
+              base.EstablishContext();
+              DoneHandler2 = new Mock<ITestHandlerObject>();
+              DoneEventArgs2 = new EventArgs();
+            }
+
+            protected override void Because()
+            {
+              base.Because();
+              SystemUnderTest.Done(DoneHandler2.Object.Handler);
+            }
+
+            [Test]
+            public void TheSecondDoneHandlerShouldBeInvoked()
+            {
+              DoneHandler2.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            }
+
+            [Test]
+            public void TheFirstDoneHandlerShouldNotBeInvokedTwice()
+            {
+              DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            }
           }
         }
 
@@ -65,36 +114,76 @@ namespace Deferred.Test
           [Test]
           public void TheDoneHandlerShouldNotBeInvoked()
           {
-            Assert.AreEqual(0, DoneHandlerInvocationCount);
+            DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Never);
           }
         }
       }
 
       public abstract class WhenRegisteringAFailHandler : WhenUsingAPromise
       {
-        public int FailHandlerInvocationCount { get; private set; }
+        public Mock<ITestHandlerObject> FailHandler1 { get; private set; }
+        public EventArgs FailEventArgs1 { get; private set; }
 
         protected override void EstablishContext()
         {
           base.EstablishContext();
-          PromiseUnderTest.Fail((sender, args) => { FailHandlerInvocationCount++; });
+          FailHandler1 = new Mock<ITestHandlerObject>();
+          FailEventArgs1 = new EventArgs();
         }
 
-        public class WhenTheDeferredIsResolved : WhenRegisteringAFailHandler
+        protected override void Because()
+        {
+          base.Because();
+          PromiseUnderTest.Done(FailHandler1.Object.Handler);
+        }
+
+        public class WhenTheDeferredIsRejected : WhenRegisteringAFailHandler
         {
           protected override void Because()
           {
+            base.Because();
             SystemUnderTest.Resolve(null);
           }
 
           [Test]
-          public void TheFailHandlerShouldNotBeInvoked()
+          public void TheFailHandlerShouldBeInvoked()
           {
-            Assert.AreEqual(0, FailHandlerInvocationCount);
+            FailHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+          }
+
+          public class WhenAnotherFailHandlerIsRegistered : WhenTheDeferredIsRejected
+          {
+            public Mock<ITestHandlerObject> FailHandler2 { get; private set; }
+            public EventArgs FailEventArgs2 { get; private set; }
+
+            protected override void EstablishContext()
+            {
+              base.EstablishContext();
+              FailHandler2 = new Mock<ITestHandlerObject>();
+              FailEventArgs2 = new EventArgs();
+            }
+
+            protected override void Because()
+            {
+              base.Because();
+              SystemUnderTest.Done(FailHandler2.Object.Handler);
+            }
+
+            [Test]
+            public void TheSecondFailHandlerShouldBeInvoked()
+            {
+              FailHandler2.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            }
+
+            [Test]
+            public void TheFirstFailHandlerShouldNotBeInvokedTwice()
+            {
+              FailHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            }
           }
         }
 
-        public class WhenTheDeferredIsRejected : WhenRegisteringAFailHandler
+        public class WhenTheDeferredIsResolved : WhenRegisteringAFailHandler
         {
           protected override void Because()
           {
@@ -102,9 +191,9 @@ namespace Deferred.Test
           }
 
           [Test]
-          public void TheFailHandlerShouldBeInvoked()
+          public void TheFailHandlerShouldNotBeInvoked()
           {
-            Assert.AreEqual(1, FailHandlerInvocationCount);
+            FailHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Never);
           }
         }
       }
