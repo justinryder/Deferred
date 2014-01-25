@@ -1,24 +1,37 @@
-﻿using System;
-
-namespace Deferred
+﻿namespace Deferred
 {
-  public class Deferred : Promise, IDeferred
+  public class Deferred<T> : Promise<T>, IDeferred<T>
   {
-    public IPromise Promise
+    public IPromise<T> Promise
     {
       get { return this; }
     }
 
-    public void Resolve(EventArgs args)
+    public void Resolve(T args)
     {
+      SingleResolveOrRejectContract();
+
       Done(args);
-      Always(args);
     }
 
-    public void Reject(EventArgs args)
+    public void Reject(T args)
     {
+      SingleResolveOrRejectContract();
+
       Fail(args);
-      Always(args);
+    }
+
+    /// <summary>Enforces the constact that a promise can only be resolved or rejected once</summary>
+    private void SingleResolveOrRejectContract()
+    {
+      if (IsDone)
+      {
+        throw new ResolvedDeferredException("The deferred has already been resolved.");
+      }
+      if (HasFailed)
+      {
+        throw new RejectedDeferredException("The deferred has already been resolved.");
+      }
     }
   }
 }

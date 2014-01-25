@@ -1,29 +1,31 @@
-﻿using System;
-
-namespace Deferred
+﻿namespace Deferred
 {
   /// <summary>
   /// Represents a promise that some computing will be completed.
-  /// Objects can register callbacks that are invoked when the promis is resolved or rejected.
+  /// Objects can register callbacks that are invoked when the <see cref="IDeferred{T}"/> is resolved or rejected.
   /// </summary>
-  public interface IPromise
+  public interface IPromise<out T>
   {
     /// <summary>
-    /// Registers a handler that will be called when the promise is resolved or rejected.
+    /// Registers a handler that will be called when the <see cref="IDeferred{T}"/> is resolved or rejected.
     /// Handlers registered after resolution or rejection will be called immediately.
     /// </summary>
-    IPromise Always(EventHandler handler);
+    IPromise<T> Always(PromiseAlwaysHandler<T> handler);
 
     /// <summary>
-    /// Registers a handler that will be called when the promise is resolved.
+    /// Registers a handler that will be called when the <see cref="IDeferred{T}"/> is resolved.
     /// Handlers registered after resolution will be called immediately.
     /// </summary>
-    IPromise Done(EventHandler handler);
+    IPromise<T> Done(PromiseDoneHandler<T> handler);
 
     /// <summary>
-    /// Registers a handler that will be called when the promise is rejected.
+    /// Registers a handler that will be called when the <see cref="IDeferred{T}"/> is rejected.
     /// Handlers registered after rejection will be called immediately.
     /// </summary>
-    IPromise Fail(EventHandler handler);
+    IPromise<T> Fail(PromiseFailHandler<T> handler);
   }
+
+  public delegate void PromiseAlwaysHandler<in T>(T args);
+  public delegate void PromiseDoneHandler<in T>(T args);
+  public delegate void PromiseFailHandler<in T>(T args);
 }

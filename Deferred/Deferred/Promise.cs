@@ -1,84 +1,94 @@
-﻿using System;
+﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace Deferred
 {
-  public class Promise : IPromise
+  public class Promise<T> : IPromise<T>
   {
-    private event EventHandler OnAlways;
-    private event EventHandler OnDone;
-    private event EventHandler OnFail;
+    private readonly Queue<PromiseAlwaysHandler<T>> _alwaysHandlers = new Queue<PromiseAlwaysHandler<T>>();
+    private readonly Queue<PromiseDoneHandler<T>> _doneHandlers = new Queue<PromiseDoneHandler<T>>();
+    private readonly Queue<PromiseFailHandler<T>> _failHandlers = new Queue<PromiseFailHandler<T>>();
 
-    private EventArgs _alwaysArgs;
-    private bool _isResolved;
-    private EventArgs _resolvedArgs;
-    private bool _isRejected;
-    private EventArgs _rejectedArgs;
+    protected bool IsDone { get; private set; }
+    protected bool HasFailed { get; private set; }
+
+    private T _alwaysArgs;
+    private T _doneArgs;
+    private T _failArgs;
 
     /// <summary>Internal to enforce initialization as a <see cref="Deferred"/></summary>
     internal Promise()
     {
     }
 
-    public IPromise Always(EventHandler handler)
+    #region IPromise Implementation
+
+    public IPromise<T> Always(PromiseAlwaysHandler<T> handler)
     {
-      OnAlways += handler;
-      if (_isResolved || _isRejected)
+      _alwaysHandlers.Enqueue(handler);
+      if (IsDone || HasFailed)
       {
         Always(_alwaysArgs);
       }
       return this;
     }
 
-    public IPromise Done(EventHandler handler)
+    public IPromise<T> Done(PromiseDoneHandler<T> handler)
     {
-      OnDone += handler;
-      if (_isResolved)
+      _doneHandlers.Enqueue(handler);
+      if (IsDone)
       {
-        Done(_resolvedArgs);
+        Done(_doneArgs);
       }
       return this;
     }
 
-    public IPromise Fail(EventHandler handler)
+    public IPromise<T> Fail(PromiseFailHandler<T> handler)
     {
-      OnFail += handler;
-      if (_isRejected)
+      _failHandlers.Enqueue(handler);
+      if (HasFailed)
       {
-        Fail(_rejectedArgs);
+        Fail(_failArgs);
       }
       return this;
     }
 
-    protected void Always(EventArgs args)
+    #endregion
+
+    /// <summary>Invokes and clears the <see cref="_alwaysHandlers"/></summary>
+    private void Always(T args)
     {
       _alwaysArgs = args;
-      if (OnAlways != null)
+      while (_alwaysHandlers.Any())
       {
-        OnAlways(this, args);
+        _alwaysHandlers.Dequeue().Invoke(args);
       }
-      OnAlways = null;
     }
 
-    protected void Done(EventArgs args)
+    /// <summary>Invokes and clears the <see cref="_doneHandlers"/></summary>
+    protected void Done(T args)
     {
-      _resolvedArgs = args;
-      _isResolved = true;
-      if (OnDone != null)
+      _doneArgs = args;
+      IsDone = true;
+      while (_doneHandlers.Any())
       {
-        OnDone(this, args);
+        _doneHandlers.Dequeue().Invoke(args);
       }
-      OnDone = null;
+
+      Always(args);
     }
 
-    protected void Fail(EventArgs args)
+    /// <summary>Invokes and clears the <see cref="_failHandlers"/></summary>
+    protected void Fail(T args)
     {
-      _rejectedArgs = args;
-      _isRejected = true;
-      if (OnFail != null)
+      _failArgs = args;
+      HasFailed = true;
+      while (_failHandlers.Any())
       {
-        OnFail(this, args);
+        _failHandlers.Dequeue().Invoke(args);
       }
-      OnFail = null;
+
+      Always(args);
     }
   }
 }

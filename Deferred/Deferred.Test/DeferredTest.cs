@@ -4,22 +4,24 @@ using NUnit.Framework;
 
 namespace Deferred.Test
 {
-  public interface ITestHandlerObject
+  public interface IPromiseComsumer
   {
-    void Handler(object sender, EventArgs args);
+    void AlwaysHandler(object args);
+    void DoneHandler(object args);
+    void FailHandler(object args);
   }
 
   [TestFixture]
-  public abstract class DeferredTest : TestBase<IDeferred>
+  public abstract class DeferredTest : TestBase<IDeferred<object>>
   {
-    protected override IDeferred CreateSystemUnderTest()
+    protected override IDeferred<object> CreateSystemUnderTest()
     {
-      return new Deferred();
+      return new Deferred<object>();
     }
 
     public abstract class WhenUsingAPromise : DeferredTest
     {
-      public IPromise PromiseUnderTest { get; private set; }
+      public IPromise<object> PromiseUnderTest { get; private set; }
 
       protected override void EstablishContext()
       {
@@ -29,20 +31,20 @@ namespace Deferred.Test
 
       public abstract class WhenRegisteringADoneHandler : WhenUsingAPromise
       {
-        public Mock<ITestHandlerObject> DoneHandler1 { get; private set; }
-        public EventArgs DoneEventArgs1 { get; private set; }
+        public Mock<IPromiseComsumer> DoneHandler1 { get; private set; }
+        public object DoneArgs { get; private set; }
 
         protected override void EstablishContext()
         {
           base.EstablishContext();
-          DoneHandler1 = new Mock<ITestHandlerObject>();
-          DoneEventArgs1 = new EventArgs();
+          DoneHandler1 = new Mock<IPromiseComsumer>();
+          DoneArgs = new object();
         }
 
         protected override void Because()
         {
           base.Because();
-          PromiseUnderTest.Done(DoneHandler1.Object.Handler);
+          PromiseUnderTest.Done(DoneHandler1.Object.DoneHandler);
         }
 
         public class WhenTheDeferredIsResolved : WhenRegisteringADoneHandler
@@ -50,78 +52,84 @@ namespace Deferred.Test
           protected override void Because()
           {
             base.Because();
-            SystemUnderTest.Resolve(null);
+            SystemUnderTest.Resolve(DoneArgs);
           }
 
           [Test]
           public void TheDoneHandlerShouldBeInvoked()
           {
-            DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            DoneHandler1.Verify(x => x.DoneHandler(DoneArgs), Times.Once);
           }
 
           public class WhenAnotherDoneHandlerIsRegistered : WhenTheDeferredIsResolved
           {
-            public Mock<ITestHandlerObject> DoneHandler2 { get; private set; }
-            public EventArgs DoneEventArgs2 { get; private set; }
+            public Mock<IPromiseComsumer> DoneHandler2 { get; private set; }
 
             protected override void EstablishContext()
             {
               base.EstablishContext();
-              DoneHandler2 = new Mock<ITestHandlerObject>();
-              DoneEventArgs2 = new EventArgs();
+              DoneHandler2 = new Mock<IPromiseComsumer>();
             }
 
             protected override void Because()
             {
               base.Because();
-              SystemUnderTest.Done(DoneHandler2.Object.Handler);
+              SystemUnderTest.Done(DoneHandler2.Object.DoneHandler);
             }
 
             [Test]
             public void TheSecondDoneHandlerShouldBeInvoked()
             {
-              DoneHandler2.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+              DoneHandler2.Verify(x => x.DoneHandler(DoneArgs), Times.Once);
             }
 
             [Test]
             public void TheFirstDoneHandlerShouldNotBeInvokedTwice()
             {
-              DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+              DoneHandler1.Verify(x => x.DoneHandler(DoneArgs), Times.Once);
             }
           }
         }
 
         public class WhenTheDeferredIsRejected : WhenRegisteringADoneHandler
         {
+          public object FailArgs { get; private set; }
+
+          protected override void EstablishContext()
+          {
+            base.EstablishContext();
+            FailArgs = new object();
+          }
+
           protected override void Because()
           {
-            SystemUnderTest.Reject(null);
+            SystemUnderTest.Reject(FailArgs);
           }
 
           [Test]
           public void TheDoneHandlerShouldNotBeInvoked()
           {
-            DoneHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Never);
+            DoneHandler1.Verify(x => x.DoneHandler(FailArgs), Times.Never);
           }
         }
       }
 
       public abstract class WhenRegisteringAFailHandler : WhenUsingAPromise
       {
-        public Mock<ITestHandlerObject> FailHandler1 { get; private set; }
-        public EventArgs FailEventArgs1 { get; private set; }
+        public Mock<IPromiseComsumer> FailHandler1 { get; private set; }
+        public object FailArgs1 { get; private set; }
 
         protected override void EstablishContext()
         {
           base.EstablishContext();
-          FailHandler1 = new Mock<ITestHandlerObject>();
-          FailEventArgs1 = new EventArgs();
+          FailHandler1 = new Mock<IPromiseComsumer>();
+          FailArgs1 = new object();
         }
 
         protected override void Because()
         {
           base.Because();
-          PromiseUnderTest.Fail(FailHandler1.Object.Handler);
+          PromiseUnderTest.Fail(FailHandler1.Object.FailHandler);
         }
 
         public class WhenTheDeferredIsRejected : WhenRegisteringAFailHandler
@@ -129,79 +137,84 @@ namespace Deferred.Test
           protected override void Because()
           {
             base.Because();
-            SystemUnderTest.Reject(FailEventArgs1);
+            SystemUnderTest.Reject(FailArgs1);
           }
 
           [Test]
           public void TheFailHandlerShouldBeInvoked()
           {
-            FailHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            FailHandler1.Verify(x => x.FailHandler(FailArgs1), Times.Once);
           }
 
           public class WhenAnotherFailHandlerIsRegistered : WhenTheDeferredIsRejected
           {
-            public Mock<ITestHandlerObject> FailHandler2 { get; private set; }
-            public EventArgs FailEventArgs2 { get; private set; }
+            public Mock<IPromiseComsumer> FailHandler2 { get; private set; }
 
             protected override void EstablishContext()
             {
               base.EstablishContext();
-              FailHandler2 = new Mock<ITestHandlerObject>();
-              FailEventArgs2 = new EventArgs();
+              FailHandler2 = new Mock<IPromiseComsumer>();
             }
 
             protected override void Because()
             {
               base.Because();
-              SystemUnderTest.Fail(FailHandler2.Object.Handler);
+              SystemUnderTest.Fail(FailHandler2.Object.FailHandler);
             }
 
             [Test]
             public void TheSecondFailHandlerShouldBeInvoked()
             {
-              FailHandler2.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+              FailHandler2.Verify(x => x.FailHandler(FailArgs1), Times.Once);
             }
 
             [Test]
             public void TheFirstFailHandlerShouldNotBeInvokedTwice()
             {
-              FailHandler1.Verify(x => x.Handler(PromiseUnderTest, FailEventArgs1), Times.Once);
-              FailHandler1.Verify(x => x.Handler(PromiseUnderTest, FailEventArgs2), Times.Never);
+              FailHandler1.Verify(x => x.FailHandler(FailArgs1), Times.Once);
             }
           }
         }
 
         public class WhenTheDeferredIsResolved : WhenRegisteringAFailHandler
         {
+          public object DoneArgs { get; private set; }
+
+          protected override void EstablishContext()
+          {
+            base.EstablishContext();
+            DoneArgs = new object();
+          }
+
           protected override void Because()
           {
-            SystemUnderTest.Resolve(FailEventArgs1);
+            SystemUnderTest.Resolve(DoneArgs);
           }
 
           [Test]
           public void TheFailHandlerShouldNotBeInvoked()
           {
-            FailHandler1.Verify(x => x.Handler(PromiseUnderTest, FailEventArgs1), Times.Never);
+            FailHandler1.Verify(x => x.FailHandler(DoneArgs), Times.Never);
           }
         }
       }
 
       public abstract class WhenRegisteringAnAlwaysHandler : WhenUsingAPromise
       {
-        public Mock<ITestHandlerObject> AlwaysHandler1 { get; private set; }
-        public EventArgs AlwaysEventArgs1 { get; private set; }
+        public Mock<IPromiseComsumer> AlwaysHandler1 { get; private set; }
+        public object AlwaysArgs { get; private set; }
 
         protected override void EstablishContext()
         {
           base.EstablishContext();
-          AlwaysHandler1 = new Mock<ITestHandlerObject>();
-          AlwaysEventArgs1 = new EventArgs();
+          AlwaysHandler1 = new Mock<IPromiseComsumer>();
+          AlwaysArgs = new object();
         }
 
         protected override void Because()
         {
           base.Because();
-          PromiseUnderTest.Always(AlwaysHandler1.Object.Handler);
+          PromiseUnderTest.Always(AlwaysHandler1.Object.AlwaysHandler);
         }
 
         public abstract class WhenTheDeferredIsResolvedOrRejected : WhenRegisteringAnAlwaysHandler
@@ -209,7 +222,7 @@ namespace Deferred.Test
           [Test]
           public void TheAlwaysHandlerShouldBeInvoked()
           {
-            AlwaysHandler1.Verify(x => x.Handler(PromiseUnderTest, It.IsAny<EventArgs>()), Times.Once);
+            AlwaysHandler1.Verify(x => x.AlwaysHandler(AlwaysArgs), Times.Once);
           }
 
           public class WhenTheDeferredIsResolved : WhenTheDeferredIsResolvedOrRejected
@@ -217,24 +230,54 @@ namespace Deferred.Test
             protected override void Because()
             {
               base.Because();
-              SystemUnderTest.Resolve(AlwaysEventArgs1);
+              SystemUnderTest.Resolve(AlwaysArgs);
             }
 
             public class WhenTheDeferredIsResolvedAgain : WhenTheDeferredIsResolved
             {
+              private Exception _exception;
+
               protected override void Because()
               {
                 base.Because();
-                SystemUnderTest.Resolve(AlwaysEventArgs1);
+                try
+                {
+                  SystemUnderTest.Resolve(AlwaysArgs);
+                }
+                catch (Exception e)
+                {
+                  _exception = e;
+                }
+              }
+
+              [Test]
+              public void ARejectedPromiseExceptionShouldBeThrown()
+              {
+                Assert.IsInstanceOf<ResolvedDeferredException>(_exception);
               }
             }
 
             public class WhenTheDeferredIsAlsoRejected : WhenTheDeferredIsResolved
             {
+              private Exception _exception;
+
               protected override void Because()
               {
                 base.Because();
-                SystemUnderTest.Reject(AlwaysEventArgs1);
+                try
+                {
+                  SystemUnderTest.Reject(AlwaysArgs);
+                }
+                catch (Exception e)
+                {
+                  _exception = e;
+                }
+              }
+
+              [Test]
+              public void AResolvedPromiseExceptionShouldBeThrown()
+              {
+                Assert.IsInstanceOf<ResolvedDeferredException>(_exception);
               }
             }
           }
@@ -244,24 +287,54 @@ namespace Deferred.Test
             protected override void Because()
             {
               base.Because();
-              SystemUnderTest.Reject(AlwaysEventArgs1);
+              SystemUnderTest.Reject(AlwaysArgs);
             }
 
             public class WhenTheDeferredIsRejectedAgain : WhenTheDeferredIsRejected
             {
+              private Exception _exception;
+
               protected override void Because()
               {
                 base.Because();
-                SystemUnderTest.Reject(It.IsAny<EventArgs>());
+                try
+                {
+                  SystemUnderTest.Resolve(AlwaysArgs);
+                }
+                catch (Exception e)
+                {
+                  _exception = e;
+                }
+              }
+
+              [Test]
+              public void ARejectedPromiseExceptionShouldBeThrown()
+              {
+                Assert.IsInstanceOf<RejectedDeferredException>(_exception);
               }
             }
 
             public class WhenTheDeferredIsAlsoResolved : WhenTheDeferredIsRejected
             {
+              private Exception _exception;
+
               protected override void Because()
               {
                 base.Because();
-                SystemUnderTest.Resolve(AlwaysEventArgs1);
+                try
+                {
+                  SystemUnderTest.Resolve(AlwaysArgs);
+                }
+                catch (Exception e)
+                {
+                  _exception = e;
+                }
+              }
+
+              [Test]
+              public void ARejectedPromiseExceptionShouldBeThrown()
+              {
+                Assert.IsInstanceOf<RejectedDeferredException>(_exception);
               }
             }
           }
