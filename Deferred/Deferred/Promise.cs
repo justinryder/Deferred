@@ -14,6 +14,11 @@ namespace Deferred
     private bool _isRejected;
     private EventArgs _rejectedArgs;
 
+    /// <summary>Internal to enforce initialization as a <see cref="Deferred"/></summary>
+    internal Promise()
+    {
+    }
+
     public IPromise Always(EventHandler handler)
     {
       OnAlways += handler;
