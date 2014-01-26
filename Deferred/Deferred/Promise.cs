@@ -8,6 +8,9 @@ namespace Deferred
     private readonly Queue<PromiseAlwaysHandler<T>> _alwaysHandlers = new Queue<PromiseAlwaysHandler<T>>();
     private readonly Queue<PromiseDoneHandler<T>> _doneHandlers = new Queue<PromiseDoneHandler<T>>();
     private readonly Queue<PromiseFailHandler<T>> _failHandlers = new Queue<PromiseFailHandler<T>>();
+    private readonly Queue<PromiseThenHandler<T>> _thenDoneHandlers = new Queue<PromiseThenHandler<T>>();
+    private readonly Queue<PromiseThenHandler<T>> _thenFailHandlers = new Queue<PromiseThenHandler<T>>();
+    private readonly Queue<PromiseThenHandler<T>> _thenAlwaysHandlers = new Queue<PromiseThenHandler<T>>();
 
     protected bool IsDone { get; private set; }
     protected bool HasFailed { get; private set; }
@@ -53,9 +56,37 @@ namespace Deferred
       return this;
     }
 
+    public IPromise<T> Then(PromiseThenHandler<T> doneHandler, PromiseThenHandler<T> failHandler)
+    {
+      ThenDone(doneHandler);
+      ThenFail(failHandler);
+      return this;
+    }
+
+    public IPromise<T> ThenDone(PromiseThenHandler<T> handler)
+    {
+      ThenAfterResolveOrRejectContract();
+      _thenDoneHandlers.Enqueue(handler);
+      return this;
+    }
+
+    public IPromise<T> ThenFail(PromiseThenHandler<T> handler)
+    {
+      ThenAfterResolveOrRejectContract();
+      _thenFailHandlers.Enqueue(handler);
+      return this;
+    }
+
+    public IPromise<T> ThenAlways(PromiseThenHandler<T> handler)
+    {
+      ThenAfterResolveOrRejectContract();
+      _thenAlwaysHandlers.Enqueue(handler);
+      return this;
+    }
+
     #endregion
 
-    /// <summary>Invokes and clears the <see cref="_alwaysHandlers"/></summary>
+    /// <summary>Invokes and clears the <see cref="_alwaysHandlers"/> and sets the <see cref="_alwaysArgs"/></summary>
     private void Always(T args)
     {
       _alwaysArgs = args;
@@ -65,9 +96,10 @@ namespace Deferred
       }
     }
 
-    /// <summary>Invokes and clears the <see cref="_doneHandlers"/></summary>
+    /// <summary>Invokes and clears the <see cref="_doneHandlers"/> and sets the <see cref="_doneArgs"/></summary>
     protected void Done(T args)
     {
+      ThenDone(ref args);
       _doneArgs = args;
       IsDone = true;
       while (_doneHandlers.Any())
@@ -78,9 +110,10 @@ namespace Deferred
       Always(args);
     }
 
-    /// <summary>Invokes and clears the <see cref="_failHandlers"/></summary>
+    /// <summary>Invokes and clears the <see cref="_failHandlers"/> and sets the <see cref="_failArgs"/></summary>
     protected void Fail(T args)
     {
+      ThenFail(ref args);
       _failArgs = args;
       HasFailed = true;
       while (_failHandlers.Any())
@@ -89,6 +122,44 @@ namespace Deferred
       }
 
       Always(args);
+    }
+
+    private void ThenDone(ref T args)
+    {
+      while (_thenDoneHandlers.Any())
+      {
+        _thenDoneHandlers.Dequeue().Invoke(ref args);
+      }
+      ThenAlways(ref args);
+    }
+
+    private void ThenFail(ref T args)
+    {
+      while (_thenFailHandlers.Any())
+      {
+        _thenFailHandlers.Dequeue().Invoke(ref args);
+      }
+      ThenAlways(ref args);
+    }
+
+    private void ThenAlways(ref T args)
+    {
+      while (_thenAlwaysHandlers.Any())
+      {
+        _thenAlwaysHandlers.Dequeue().Invoke(ref args);
+      }
+    }
+
+    private void ThenAfterResolveOrRejectContract()
+    {
+      if (IsDone)
+      {
+        throw new ResolvedDeferredException("The promise has already been resolved.");
+      }
+      if (HasFailed)
+      {
+        throw  new RejectedDeferredException("The promise has already been rejected.");
+      }
     }
   }
 }
